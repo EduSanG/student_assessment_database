@@ -142,16 +142,41 @@ def show_exam_result(request, course_id, submission_id):
     course = get_object_or_404(Course, pk=course_id)
     submission = get_object_or_404(Submission, pk=submission_id)
     questions = course.question_set.all()
+    
+    final_score = get_grade(questions, submission)
+    context = {}
+    context['course'] = course
+    context['grade'] = final_score
+    context['exam'] = load_exam(questions, submission)
+    return render(request, 'onlinecourse/exam_result_bootstrap.html', context)
+
+def get_grade(questions_set, submission):
     max_grade = 0
     submission_grade = 0
-    for question in questions:
+    for question in questions_set:
         answers = submission.choices.filter(question=question).values_list('id', flat=True)
         max_grade += question.grade
         if(question.is_get_score(selected_ids=answers)):
             submission_grade += question.grade
-    final_score = submission_grade/max_grade * 100
-    context = {}
-    context['course'] = course
-    context['selected_ids'] = submission.choices.all().values_list('id', flat=True)
-    context['grade'] = final_score
-    return render(request, 'onlinecourse/exam_result_bootstrap.html', context)
+    return submission_grade/max_grade * 100
+
+def load_exam(questions, submission):
+    exam = []
+    for question in questions:
+        selected_answers = submission.choices.filter(question=question).values_list('id', flat=True)
+        
+        question_cluster = {}
+        question_cluster['question'] = question.question_content
+        question_cluster['choices'] = get_choices(question, selected_answers)
+        exam.append(question_cluster)
+    return tuple(exam)
+
+def get_choices(question, selected_answers):
+    choices = []
+    for choice in question.choice_set.all():
+        choice_cluster = {}
+        choice_cluster['text'] = choice.choice_content
+        choice_cluster['is_correct'] = choice.is_correct
+        choice_cluster['is_selected'] = True if choice.id in selected_answers else False
+        choices.append(choice_cluster)
+    return tuple(choices)
